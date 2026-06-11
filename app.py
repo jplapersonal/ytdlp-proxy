@@ -35,7 +35,13 @@ def ensure_cookies():
 
 
 def base_cmd():
-    cmd = ["yt-dlp", "--no-playlist", "--no-warnings"]
+    cmd = [
+        "yt-dlp",
+        "--no-playlist",
+        "--no-warnings",
+        # iOS client bypasses datacenter IP blocks that affect the web client
+        "--extractor-args", "youtube:player_client=ios,web",
+    ]
     if YOUTUBE_COOKIES:
         ensure_cookies()
         cmd += ["--cookies", COOKIES_FILE]
