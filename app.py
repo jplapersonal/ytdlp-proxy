@@ -31,7 +31,7 @@ def build_ytdlp_cmd(video_id):
     cmd = [
         "yt-dlp",
         "--no-playlist",
-        "--format", "bestaudio[ext=m4a]/bestaudio/best",
+        "--format", "140/bestaudio/best",
         "--print", "%(title)s|||%(duration)s|||%(url)s",
         "--no-warnings",
         "--quiet",
