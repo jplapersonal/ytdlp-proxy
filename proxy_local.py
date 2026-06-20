@@ -464,8 +464,39 @@ DOWNLOAD_DIR = "/Volumes/Musica/ReloadTrack"
 RIP_CMD = os.path.expanduser("~/.local/bin/rip")
 STREAMRIP_CONFIG = os.path.expanduser("~/Library/Application Support/streamrip/config.toml")
 DL_JOBS_FILE = os.path.expanduser("~/.local/share/reloadtrack/download_jobs.json")
+XML_UPDATE_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "analyze_and_update_xml.py")
+XML_WATCH_DIR = "/Volumes/Musica/ReloadTrack"
 
 os.makedirs(os.path.dirname(DL_JOBS_FILE), exist_ok=True)
+
+# ── XML auto-update (debounced 30s) ──────────────────────────────────────────
+_xml_timer      = None
+_xml_timer_lock = threading.Lock()
+
+def _run_xml_update():
+    global _xml_timer
+    _xml_timer = None
+    if not os.path.exists(XML_UPDATE_SCRIPT):
+        print(f"[xml] Script not found: {XML_UPDATE_SCRIPT}", flush=True)
+        return
+    print("[xml] Actualizando reloadtrack_cues.xml...", flush=True)
+    try:
+        r = subprocess.run(["python3", XML_UPDATE_SCRIPT],
+                           capture_output=True, text=True, timeout=900)
+        last = (r.stdout or r.stderr).strip().splitlines()
+        print(f"[xml] ✓ {last[-1] if last else 'done'}", flush=True)
+    except Exception as e:
+        print(f"[xml] ✗ Error: {e}", flush=True)
+
+def _schedule_xml_update():
+    global _xml_timer
+    with _xml_timer_lock:
+        if _xml_timer:
+            _xml_timer.cancel()
+        _xml_timer = threading.Timer(30.0, _run_xml_update)
+        _xml_timer.daemon = True
+        _xml_timer.start()
+        print("[xml] XML update programado en 30s", flush=True)
 
 _download_jobs = {}   # job_id -> {status, artist, title, deezer_url, error}
 _dl_queue = _queue.Queue()
@@ -538,6 +569,9 @@ def _dl_worker():
                 job["status"]   = "done"
                 job["progress"] = "100%"
                 print(f"[dl] ✓ {job_id} done — {artist} - {title}", flush=True)
+                # Auto-update XML if downloaded to ReloadTrack library
+                if XML_WATCH_DIR in target_dir:
+                    _schedule_xml_update()
             else:
                 reason = "skipped by DB" if skipped_by_db else f"exit code {proc.returncode}"
                 job["status"] = "error"
