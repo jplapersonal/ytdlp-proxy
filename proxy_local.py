@@ -609,6 +609,40 @@ def download_async():
         if info.get("deezer_url") == deezer_url and info.get("status") in ("queued","downloading","done"):
             return jsonify({"ok": True, "job_id": jid, "status": info["status"], "duplicate": True})
 
+    # Deduplicate: check if file already exists on disk across all music folders
+    if artist or title:
+        import unicodedata, re as _re
+        def _norm(s):
+            s = unicodedata.normalize("NFKD", s.lower())
+            s = "".join(c for c in s if not unicodedata.combining(c))
+            return _re.sub(r"[^a-z0-9]", "", s)
+        artist_n = _norm(artist)
+        title_n  = _norm(title)
+        music_roots = [DOWNLOAD_DIR] if DOWNLOAD_DIR else []
+        # Also scan sibling folders (House, HouseMash, Remember, etc.)
+        parent = os.path.dirname(DOWNLOAD_DIR) if DOWNLOAD_DIR else None
+        if parent and os.path.isdir(parent):
+            for d in os.listdir(parent):
+                fp = os.path.join(parent, d)
+                if os.path.isdir(fp) and fp not in music_roots:
+                    music_roots.append(fp)
+        for root in music_roots:
+            if not os.path.isdir(root):
+                continue
+            for fname in os.listdir(root):
+                if fname.startswith("._"):
+                    continue
+                fname_n = _norm(fname)
+                if artist_n and title_n:
+                    if artist_n[:8] in fname_n and title_n[:8] in fname_n:
+                        folder_name = os.path.basename(root)
+                        return jsonify({"ok": True, "duplicate": True, "already_on_disk": True,
+                                        "found_file": fname, "found_folder": folder_name})
+                elif title_n and len(title_n) > 6 and title_n in fname_n:
+                    folder_name = os.path.basename(root)
+                    return jsonify({"ok": True, "duplicate": True, "already_on_disk": True,
+                                    "found_file": fname, "found_folder": folder_name})
+
     job_id = str(_uuid.uuid4())[:8]
     _download_jobs[job_id] = {
         "status": "queued", "artist": artist, "title": title,
@@ -1688,35 +1722,78 @@ def batch_download():
     t.start()
     return jsonify({"ok": True, "queued": len(tracks)})
 
-def _auto_register_tunnel(retries=10, delay=4):
-    """Auto-detect cloudflare quick tunnel URL and register with worker."""
+def _polling_daemon():
     import time
-    for i in range(retries):
-        time.sleep(delay)
+    import requests
+    import shutil
+    import json
+    
+    API_QUEUE_URL = "https://reloadtrack-app.pages.dev/api/queue"
+    DOWNLOAD_FOLDER = "/Volumes/X9 Pro/Musica/ReloadTrack/HouseMash"
+    
+    def get_executable(name):
+        path = shutil.which(name)
+        if path: return path
+        home = os.path.expanduser('~')
+        if os.path.exists(f"{home}/.local/bin/{name}"):
+            return f"{home}/.local/bin/{name}"
+        return name
+
+    print("[polling] Daemon de colas iniciado en proxy_local...", flush=True)
+    while True:
         try:
-            r = requests.get("http://localhost:2999/quicktunnel", timeout=3)
-            if r.ok:
+            r = requests.get(f"{API_QUEUE_URL}?pop=1&secret={PROXY_SECRET}", timeout=10)
+            if r.status_code == 200:
                 data = r.json()
-                hostname = data.get("hostname", "")
-                if hostname:
-                    url = f"https://{hostname}"
-                    print(f"[tunnel] Auto-detected URL: {url}", flush=True)
-                    # Register with the Cloudflare Worker so dashboard picks it up
+                if data.get('pending') and data.get('task'):
+                    task = data['task']
+                    url = task.get('url')
+                    provider = task.get('provider')
+                    source_str = task.get('source', '{}')
+                    
                     try:
-                        requests.post(
-                            f"{APP_WORKER_URL}/api/proxy-url?secret={PROXY_SECRET}",
-                            json={"url": url}, timeout=10
-                        )
-                        print(f"[tunnel] Registered with worker ✓", flush=True)
-                    except Exception as re:
-                        print(f"[tunnel] Worker register failed: {re}", flush=True)
-                    return
+                        source = json.loads(source_str)
+                    except:
+                        source = {}
+                        
+                    chat_id = source.get('chat_id', '')
+                    bot_token = source.get('bot_token', '')
+                    
+                    success = True
+                    if provider == 'fingerprint':
+                        cache_id = task['id']
+                        print(f"[polling] Iniciando fingerprint_worker_url para {url}")
+                        threading.Thread(target=fingerprint_worker_url, args=(url, cache_id, chat_id, bot_token), daemon=True).start()
+                    elif provider == 'channel-enqueue':
+                        print(f"[polling] Iniciando channel_enqueue_worker para {url}")
+                        threading.Thread(target=channel_enqueue_worker, args=(url, chat_id, bot_token), daemon=True).start()
+                    else:
+                        print(f"[polling] Descarga estandar para {url}")
+                        try:
+                            os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+                            os.chdir(DOWNLOAD_FOLDER)
+                            if 'deezer.com' in url:
+                                exe = get_executable('rip')
+                                res = subprocess.run([exe, 'url', url], capture_output=True, text=True)
+                                success = res.returncode == 0
+                            else:
+                                exe = get_executable('yt-dlp')
+                                res = subprocess.run([exe, '-x', '--audio-format', 'mp3', url], capture_output=True, text=True)
+                                success = res.returncode == 0
+                        except Exception as e:
+                            print(f"[polling] Download error: {e}", flush=True)
+                            success = False
+                            
+                    status = 'completed' if success else 'error'
+                    requests.patch(f"{API_QUEUE_URL}?secret={PROXY_SECRET}", json={"id": task['id'], "status": status}, timeout=10)
+                    continue
         except Exception as e:
-            print(f"[tunnel] Attempt {i+1}/{retries} — waiting for cloudflared... ({e})", flush=True)
-    print("[tunnel] ⚠️  Could not auto-detect tunnel URL.", flush=True)
+            pass
+        time.sleep(10)
+
 
 if __name__ == "__main__":
     print("🚀 ytdlp-proxy LOCAL arrancado en http://localhost:5001")
     print(f"   Secret: {PROXY_SECRET}")
-    threading.Thread(target=_auto_register_tunnel, daemon=True).start()
+    threading.Thread(target=_polling_daemon, daemon=True).start()
     app.run(host="127.0.0.1", port=5001, debug=False, threaded=True)
