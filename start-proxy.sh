@@ -6,14 +6,26 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "📦 Instalando dependencias necesarias (esto puede tardar unos segundos la primera vez)..."
+echo "📦 Instalando dependencias del sistema y de Python (esto puede tardar unos segundos la primera vez)..."
+
+# 1. Herramientas del sistema necesarias para compilar librerías (como Pillow para las carátulas)
+if ! brew ls --versions libjpeg zlib &> /dev/null; then
+    echo "⚙️ Instalando librerías de sistema para imágenes (libjpeg, zlib)..."
+    brew install libjpeg zlib || true
+fi
+
+if ! command -v ffmpeg &> /dev/null; then
+    echo "⚙️ Instalando FFMPEG para el procesado de audio..."
+    brew install ffmpeg || true
+fi
+
+# 2. Actualizar las herramientas base de Python
+pip3 install --upgrade pip setuptools wheel --break-system-packages 2>/dev/null || pip3 install --upgrade pip setuptools wheel
+
+# 3. Instalar los requisitos del proyecto
 pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
 playwright install 2>/dev/null || true
 
-if ! command -v ffmpeg &> /dev/null; then
-    echo "⚙️ FFMPEG no está instalado. Instalándolo con Homebrew..."
-    brew install ffmpeg || echo "❌ Fallo al instalar ffmpeg. Por favor, instálalo manualmente."
-fi
 
 WRANGLER_DIR="$(dirname "$0")/../reloadtrack-app"
 PROJECT="reloadtrack-app"
