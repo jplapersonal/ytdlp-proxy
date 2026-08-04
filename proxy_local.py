@@ -1806,6 +1806,11 @@ def _polling_daemon():
                                 search_query = f"{artist} {title}".strip()
                                 res = subprocess.run([exe, 'search', '-f', 'deezer', 'track', search_query], capture_output=True, text=True)
                                 success = res.returncode == 0
+                                if not success:
+                                    print(f"[polling] Deezer search failed for {search_query}, falling back to yt-dlp")
+                                    exe_yt = get_executable('yt-dlp')
+                                    res_yt = subprocess.run([exe_yt, '-x', '--audio-format', 'mp3', f"ytsearch1:{search_query}"], capture_output=True, text=True)
+                                    success = res_yt.returncode == 0
                             elif url and 'deezer.com' in url:
                                 exe = get_executable('rip')
                                 res = subprocess.run([exe, 'url', url], capture_output=True, text=True)
