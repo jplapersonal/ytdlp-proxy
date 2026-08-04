@@ -1794,18 +1794,29 @@ def _polling_daemon():
                             success = False
                             print("[polling] Invalid Spotify URL")
                     else:
-                        print(f"[polling] Descarga estandar para {url}")
+                        artist = task.get('artist', '')
+                        title = task.get('title', '')
+                        print(f"[polling] Descarga estandar para URL='{url}', artist='{artist}', title='{title}'")
                         try:
                             os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
                             os.chdir(DOWNLOAD_FOLDER)
-                            if 'deezer.com' in url:
+                            if not url and artist and title:
+                                # Track from Spotify Playlist without direct URL
+                                exe = get_executable('rip')
+                                search_query = f"{artist} {title}".strip()
+                                res = subprocess.run([exe, 'search', '-f', 'deezer', 'track', search_query], capture_output=True, text=True)
+                                success = res.returncode == 0
+                            elif url and 'deezer.com' in url:
                                 exe = get_executable('rip')
                                 res = subprocess.run([exe, 'url', url], capture_output=True, text=True)
                                 success = res.returncode == 0
-                            else:
+                            elif url:
                                 exe = get_executable('yt-dlp')
                                 res = subprocess.run([exe, '-x', '--audio-format', 'mp3', url], capture_output=True, text=True)
                                 success = res.returncode == 0
+                            else:
+                                success = False
+                                print("[polling] Tarea sin URL ni metadata válida")
                         except Exception as e:
                             print(f"[polling] Download error: {e}", flush=True)
                             success = False
