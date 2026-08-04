@@ -1767,6 +1767,32 @@ def _polling_daemon():
                     elif provider == 'channel-enqueue':
                         print(f"[polling] Iniciando channel_enqueue_worker para {url}")
                         threading.Thread(target=channel_enqueue_worker, args=(url, chat_id, bot_token), daemon=True).start()
+                    elif provider == 'spotify-playlist':
+                        print(f"[polling] Iniciando spotify-playlist con Playwright para {url}")
+                        # Extract the playlist ID from the URL
+                        playlist_id = None
+                        m = re.search(r"spotify\.com/playlist/([A-Za-z0-9]+)", url)
+                        if m:
+                            playlist_id = m.group(1)
+                        if playlist_id:
+                            cb_url = source.get('callback_url')
+                            cb_sec = source.get('callback_secret')
+                            q_id = source.get('queue_id')
+                            pl_name = source.get('pl_name', '')
+                            # Since callback_url is provided, _ytdlp_chrome_cookies_extract will automatically run in background!
+                            # Wait, the function itself spawns a background thread if callback_url is provided.
+                            _ytdlp_chrome_cookies_extract(
+                                playlist_id,
+                                chat_id=chat_id,
+                                bot_token=bot_token,
+                                callback_url=cb_url,
+                                callback_secret=cb_sec,
+                                queue_id=q_id,
+                                pl_name=pl_name
+                            )
+                        else:
+                            success = False
+                            print("[polling] Invalid Spotify URL")
                     else:
                         print(f"[polling] Descarga estandar para {url}")
                         try:
