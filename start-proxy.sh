@@ -24,6 +24,11 @@ if ! command -v ffmpeg &> /dev/null; then
     brew install ffmpeg || true
 fi
 
+if ! command -v cloudflared &> /dev/null; then
+    echo "⚙️ Instalando Cloudflared (Túnel)..."
+    brew install cloudflare/cloudflare/cloudflared || true
+fi
+
 # 2. Actualizar las herramientas base de Python
 pip3 install --upgrade pip setuptools wheel --break-system-packages 2>/dev/null || pip3 install --upgrade pip setuptools wheel
 
