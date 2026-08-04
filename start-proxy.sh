@@ -14,10 +14,19 @@ if ! brew ls --versions libjpeg zlib &> /dev/null; then
     brew install libjpeg zlib || true
 fi
 
+# Exportar las rutas de Homebrew por si Python necesita compilar Pillow desde el código fuente
+export CFLAGS="-I$(brew --prefix)/include"
+export LDFLAGS="-L$(brew --prefix)/lib"
+export CPATH="$(brew --prefix)/include"
+
 if ! command -v ffmpeg &> /dev/null; then
     echo "⚙️ Instalando FFMPEG para el procesado de audio..."
     brew install ffmpeg || true
 fi
+
+# 2. Forzar la instalación de Pillow de forma precompilada (binario) para que no intente compilarlo
+echo "📦 Instalando Pillow precompilado..."
+pip3 install Pillow --only-binary :all: --break-system-packages 2>/dev/null || pip3 install Pillow --only-binary :all: 2>/dev/null || true
 
 # 2. Actualizar las herramientas base de Python
 pip3 install --upgrade pip setuptools wheel --break-system-packages 2>/dev/null || pip3 install --upgrade pip setuptools wheel
