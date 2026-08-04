@@ -10,6 +10,11 @@ echo "📦 Instalando dependencias necesarias (esto puede tardar unos segundos l
 pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
 playwright install 2>/dev/null || true
 
+if ! command -v ffmpeg &> /dev/null; then
+    echo "⚙️ FFMPEG no está instalado. Instalándolo con Homebrew..."
+    brew install ffmpeg || echo "❌ Fallo al instalar ffmpeg. Por favor, instálalo manualmente."
+fi
+
 WRANGLER_DIR="$(dirname "$0")/../reloadtrack-app"
 PROJECT="reloadtrack-app"
 DB="reloadtrack"
