@@ -460,7 +460,7 @@ def _run_fingerprint(label, local_file, duration, chat_id, bot_token, source_url
 # ── Streamrip download queue (sequential, persistent) ────────────────────────
 import uuid as _uuid, queue as _queue, json as _json
 
-DOWNLOAD_DIR = "/Volumes/Musica/ReloadTrack"
+DOWNLOAD_DIR = "/Volumes/X9 Pro/Musica/ReloadTrack/TagPending"
 RIP_CMD = os.path.expanduser("~/.local/bin/rip")
 STREAMRIP_CONFIG = os.path.expanduser("~/Library/Application Support/streamrip/config.toml")
 DL_JOBS_FILE = os.path.expanduser("~/.local/share/reloadtrack/download_jobs.json")
@@ -1729,7 +1729,7 @@ def _polling_daemon():
     import json
     
     API_QUEUE_URL = "https://reloadtrack-app.pages.dev/api/queue"
-    DOWNLOAD_FOLDER = "/Volumes/X9 Pro/Musica/ReloadTrack/HouseMash"
+    DOWNLOAD_FOLDER = "/Volumes/X9 Pro/Musica/ReloadTrack/TagPending"
     
     def get_executable(name):
         path = shutil.which(name)
