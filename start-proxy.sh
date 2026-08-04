@@ -24,16 +24,19 @@ if ! command -v ffmpeg &> /dev/null; then
     brew install ffmpeg || true
 fi
 
-# 2. Forzar la instalación de Pillow de forma precompilada (binario) para que no intente compilarlo
-echo "📦 Instalando Pillow precompilado..."
-pip3 install Pillow --only-binary :all: --break-system-packages 2>/dev/null || pip3 install Pillow --only-binary :all: 2>/dev/null || true
-
 # 2. Actualizar las herramientas base de Python
 pip3 install --upgrade pip setuptools wheel --break-system-packages 2>/dev/null || pip3 install --upgrade pip setuptools wheel
 
-# 3. Instalar los requisitos del proyecto
+# 3. Instalar Streamrip saltándose la compilación de Pillow 9
+echo "📦 Instalando Streamrip y parcheando Pillow..."
+pip3 install appdirs cleo tqdm requests pycryptodomex simple-term-menu aiohttp tomlkit aiodns aiofiles deezer-py m3u8 click mutagen pathvalidate Pillow --break-system-packages 2>/dev/null || pip3 install appdirs cleo tqdm requests pycryptodomex simple-term-menu aiohttp tomlkit aiodns aiofiles deezer-py m3u8 click mutagen pathvalidate Pillow 2>/dev/null || true
+pip3 install streamrip --no-deps --break-system-packages 2>/dev/null || pip3 install streamrip --no-deps 2>/dev/null || true
+
+# 4. Instalar los requisitos del proyecto (eliminamos streamrip de requirements para que no lo pise)
+sed -i.bak '/streamrip/d' requirements.txt
 pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
 playwright install 2>/dev/null || true
+
 
 
 WRANGLER_DIR="$(dirname "$0")/../reloadtrack-app"
