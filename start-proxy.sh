@@ -6,6 +6,10 @@
 set -e
 cd "$(dirname "$0")"
 
+echo "📦 Instalando dependencias necesarias (esto puede tardar unos segundos la primera vez)..."
+pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
+playwright install 2>/dev/null || true
+
 WRANGLER_DIR="$(dirname "$0")/../reloadtrack-app"
 PROJECT="reloadtrack-app"
 DB="reloadtrack"
@@ -40,7 +44,7 @@ TUNNEL_PID=$!
 TUNNEL_URL=""
 echo "   ⏳ Esperando URL del túnel..."
 for i in $(seq 1 30); do
-  TUNNEL_URL=$(grep -oP 'https://[a-z0-9\-]+\.trycloudflare\.com' "$TUNNEL_LOG" 2>/dev/null | head -1)
+  TUNNEL_URL=$(grep -Eo 'https://[a-z0-9\-]+\.trycloudflare\.com' "$TUNNEL_LOG" 2>/dev/null | head -1)
   if [ -n "$TUNNEL_URL" ]; then
     break
   fi
