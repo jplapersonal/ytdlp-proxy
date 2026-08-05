@@ -829,6 +829,7 @@ def spotify_playlist():
             callback_secret=body.get("callback_secret"),
             queue_id=body.get("queue_id"),
             pl_name=body.get("pl_name", ""),
+            folder=body.get("folder", "TagPending")
         )
 
     try:
@@ -901,6 +902,7 @@ def spotify_playlist():
                         callback_secret=body.get("callback_secret"),
                         queue_id=body.get("queue_id"),
                         pl_name=body.get("pl_name", ""),
+                        folder=body.get("folder", "TagPending")
                     )
 
                 return jsonify({
@@ -930,12 +932,12 @@ def spotify_playlist():
 
 def _ytdlp_chrome_cookies_extract(playlist_id, chat_id=None, bot_token=None,
                                    callback_url=None, callback_secret=None,
-                                   queue_id=None, pl_name=""):
+                                   queue_id=None, pl_name="", folder="TagPending"):
     """Playwright + system Chrome + Chrome session cookies to scrape Spotify.
     If callback_url is provided, runs async in background thread and returns immediately."""
     import threading
 
-    def _run(playlist_id, chat_id, bot_token, callback_url, callback_secret, queue_id, pl_name):
+    def _run(playlist_id, chat_id, bot_token, callback_url, callback_secret, queue_id, pl_name, folder):
         result = _playwright_scrape(playlist_id)
         tracks = result.get("tracks", [])
 
@@ -983,20 +985,49 @@ def _ytdlp_chrome_cookies_extract(playlist_id, chat_id=None, bot_token=None,
         if chunk:
             tg("sendMessage", text=chunk, parse_mode="Markdown")
 
-        # Send summary + action buttons
-        tg("sendMessage",
-           text=f"✅ *{len(tracks)} tracks* extraídos.",
-           parse_mode="Markdown",
-           reply_markup=_json2.dumps({"inline_keyboard": [[
-               {"text": "📥 Descargar todo", "callback_data": f"wldl:{queue_id}"},
-               {"text": "🏷️ Añadir TAG",    "callback_data": f"wltag:{queue_id}"},
-           ]]})
-        )
+        # If tag provided, enqueue to downloads_queue directly
+        if folder and folder != 'TagPending':
+            enqueued = 0
+            api_queue_url = "https://reloadtrack-app.pages.dev/api/queue"
+            for t in tracks:
+                payload = _json2.dumps({
+                    "artist": t.get("artist", ""),
+                    "title": t.get("title", ""),
+                    "url": "", # Will force search
+                    "source": {"folder": folder}
+                }).encode()
+                try:
+                    req = _ur2.Request(
+                        f"{api_queue_url}?secret={_up.quote(callback_secret)}",
+                        data=payload,
+                        headers={"Content-Type": "application/json", "User-Agent": _UA},
+                        method="POST"
+                    )
+                    _ur2.urlopen(req, timeout=10)
+                    enqueued += 1
+                except Exception as e:
+                    print(f"[playwright] auto-enqueue failed: {e}")
+            
+            tg("sendMessage",
+               text=f"✅ *{len(tracks)} tracks* extraídos de la playlist.\\n\\n"
+                    f"⬇️ Se han encolado *{enqueued}* tracks para descargar automáticamente en la carpeta `{folder}`.",
+               parse_mode="Markdown"
+            )
+        else:
+            # Send summary + action buttons
+            tg("sendMessage",
+               text=f"✅ *{len(tracks)} tracks* extraídos.",
+               parse_mode="Markdown",
+               reply_markup=_json2.dumps({"inline_keyboard": [[
+                   {"text": "📥 Descargar todo", "callback_data": f"wldl:{queue_id}"},
+                   {"text": "🏷️ Añadir TAG",    "callback_data": f"wltag:{queue_id}"},
+               ]]})
+            )
 
     if callback_url and chat_id:
         # Async mode: start background thread, return immediately
         t = threading.Thread(target=_run, args=(
-            playlist_id, chat_id, bot_token, callback_url, callback_secret, queue_id, pl_name
+            playlist_id, chat_id, bot_token, callback_url, callback_secret, queue_id, pl_name, folder
         ), daemon=True)
         t.start()
         return jsonify({"ok": True, "async": True, "status": "processing"})
@@ -1788,7 +1819,8 @@ def _polling_daemon():
                                 callback_url=cb_url,
                                 callback_secret=cb_sec,
                                 queue_id=q_id,
-                                pl_name=pl_name
+                                pl_name=pl_name,
+                                folder=source.get('folder', 'TagPending')
                             )
                         else:
                             success = False
