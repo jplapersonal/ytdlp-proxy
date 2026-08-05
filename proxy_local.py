@@ -1802,8 +1802,10 @@ def _polling_daemon():
                             os.chdir(DOWNLOAD_FOLDER)
                             if not url and artist and title:
                                 # Track from Spotify Playlist without direct URL
+                                # Limpiar el nombre del artista para Deezer (solo usar el primero)
+                                primary_artist = artist.split(',')[0].strip()
                                 exe = get_executable('rip')
-                                search_query = f"{artist} {title}".strip()
+                                search_query = f"{primary_artist} {title}".strip()
                                 res = subprocess.run([exe, '--folder', DOWNLOAD_FOLDER, 'search', '-f', 'deezer', 'track', search_query], capture_output=True, text=True)
                                 success = res.returncode == 0
                                 if not success:
